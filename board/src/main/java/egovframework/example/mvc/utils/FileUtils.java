@@ -1,0 +1,173 @@
+package egovframework.example.mvc.utils;
+
+import java.util.UUID;
+
+import javax.annotation.PostConstruct;
+
+import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MultipartFile;
+
+import egovframework.example.mvc.vo.FileVO;
+import egovframework.rte.fdl.property.EgovPropertyService;
+
+
+
+@Component
+public class FileUtils {
+	private Log log = LogFactory.getLog(this.getClass());
+
+	@Autowired
+	protected EgovPropertyService propertiesService;
+
+	public String ABSOLUTE_PATH;
+	public static final String RELATIVE_PATH = "images/egovframework/example/";
+	
+	
+	/** 노출되면 위함할 수 있는 파일 경로를  properties 파일을 통해 외부에서 받아온다. */
+	@PostConstruct
+	public void init() {
+		ABSOLUTE_PATH = propertiesService.getString("filePath") + RELATIVE_PATH;
+	} 
+	
+	
+	/** 받은 파일의 유효성을 검사하고 FileVO를 생성한다. (더미 파일이 들어올 경우 빈 리스트 반환) */
+	public List<FileVO> convertToFileVO(MultipartFile[] files) {
+		List<FileVO> fileVOs = new ArrayList<FileVO>();
+		
+		for(MultipartFile file : files) {
+			/* 파일 유효성 검사 */
+			if(!validate(file)) {
+				continue;
+			}
+			/* 필요한 파일 정보 추출 */
+            String[] fullName = file.getOriginalFilename().split("\\.");
+            String realName = fullName[0];
+            String extension = fullName[1];
+            String savedName = UUID.randomUUID().toString();
+            String path = generateDirPath();
+            Long size = file.getSize();
+            /* FileVO 생성 */
+            FileVO fileVO = new FileVO(realName, extension, savedName, path, size, file);
+            fileVOs.add(fileVO);
+        }		
+		return fileVOs;
+	}
+	
+	
+	/**  FileVO에서 File과 경로를 얻어 로컬에 저장한다. */
+	public void saveToLocal(List<FileVO> fileVOs) throws IOException {
+		/* 폴더 생성은 최초 한번만 하면 되기 때문에  0번 인덱스에 대해서만 진행 */
+		makeDirectory(fileVOs.get(0));
+		
+		/* 로컬에 파일 저장 */
+		for(FileVO fileVO : fileVOs) {
+			MultipartFile multipartFile = fileVO.getFile();
+			File file = makeFileByVO(fileVO);
+			
+			multipartFile.transferTo(file);
+			log.info("파일이 정상적으로 생성되었습니다 - PATH: " + file.getPath() + file.getName());
+		}
+	}
+	
+	/** 파일 삭제  */
+	public void deleteToLocal(List<FileVO> fileVOs) {
+		 for (FileVO fileVO : fileVOs) {
+	        // 삭제할 파일
+	        File file = new File(RELATIVE_PATH + fileVO.getPath() + fileVO.getSavedName());
+
+	        /* 파일이 존재하면 삭제하고 성공 여부에 따라 결과 메세지 출력 */
+	        if (file.exists() && file.delete()) {
+	            log.info("파일이 정상적으로 삭제되었습니다 - PATH: " + file.getPath() + file.getName());
+	        } else {
+	            log.error("파일 삭제에 실패했습니다 - PATH: " + file.getPath() + file.getName());
+	        }
+	    }		
+	}
+	
+	
+	
+	/** FileVO에 해당하는 File 생성 */
+	public File makeFileByVO(FileVO fileVO) {
+		String path = ABSOLUTE_PATH + fileVO.getPath() + fileVO.getSavedName();
+		return new File(path);
+	}
+	
+	/** FileVO의 경로를 통해 해당 디렉터리가 존재하는지 확인한 후 없으면 폴더를 생성 */
+	private void makeDirectory(FileVO fileVO) {
+		File dir = new File(ABSOLUTE_PATH + fileVO.getPath());
+		if(!dir.exists()) {
+			dir.mkdir();
+			log.info("디렉터리가 생성되었습니다 - PATH: " + dir.getPath());
+		}
+	}
+	
+	/** 파일을 날짜 별(yyyy-MM)로 구분하기 위한 폴더 경로 생성 */
+	private String generateDirPath() {
+		Date date = new Date();
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM");
+		String folderName = sdf.format(date);
+		
+        return folderName + "/";
+	}
+	
+	
+	/** 파일의 유효성을 검사 */
+	private boolean validate(MultipartFile file) throws IllegalArgumentException {
+		/** 
+		 * 더미 파일이 넘어왔을 경우 스킵 
+		 * HTML File 전송 시 악성 사이트에서 사용자의 파일 경로를 확인하는 것을 방지하기 위해 
+		 * C:\fakepath\가 prefix로 붙게 된다. => 빈 파일이 들어온다.
+		 */		
+		if(file.isEmpty()) {
+			return false;
+		}
+		
+		/** 허가되지 않은 확장자 업로드 시 문제가 될 수 있기 때문에 예외 발생 */
+		String[] fullName = file.getOriginalFilename().split("\\.");
+	    String extension = fullName[1];
+	    PreventExtension.validate(extension);
+	    return true;
+	}
+	
+	
+	
+	
+	/** 파일 확장자를 관리하기 위한 enum */
+	private enum PreventExtension {
+		/* 실행 가능 파일 */
+		EXE(".exe"), BAT(".bat"), SH(".sh"),
+		
+		/* script & sql */
+		JS(".js"), JSP(".jsp"), PHP(".php"), SQL(".sql");
+		
+		
+		private final String extension;
+
+		private PreventExtension(String extension) {
+			this.extension = extension;
+		}
+
+		public String getExtension() {
+			return extension;
+		}
+		
+		/* 허가되지 않은 확장자 사용 시 예외 발생 */
+		private static void validate(String extension) {
+			for(PreventExtension ex: PreventExtension.values()) {
+				if(ex.getExtension().equals(extension.toLowerCase())) {
+					throw new IllegalArgumentException("허가되지 않은 확장자를 가진 파일 입니다.");
+				}
+			}
+		}
+	}
+}

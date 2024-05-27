@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.mvc.service.mapper.PostMapper">
+
+	<resultMap id="postVO"
+		type="egovframework.example.mvc.vo.PostVO">
+		<result property="id" column="id"/>
+		<result property="memberId" column="member_id"/>
+		<result property="title" column="title"/>
+		<result property="content" column="content"/>
+		<result property="thumbnail" column="thumbnail"/>
+		<result property="viewCount" column="view_count"/>
+		<result property="regDate" column="reg_date"/>
+		<result property="modDate" column="mod_date"/>
+		<result property="useYn" column="use_yn"/>
+	</resultMap>
+	
+	
+	<!--  SELECT QUERY  --> 
+	<select id="selectPost" parameterType="Long" resultType="hashMap">
+			SELECT
+				p.id, p.member_id, p.title, p.content, p.thumbnail, p.view_count, p.reg_date, p.mod_date, m.name
+			FROM post p
+			JOIN member m ON p.member_id = m.id
+			WHERE p.id=#{id} AND p.use_yn=true	
+	</select>
+
+	<select id="selectPostList" parameterType="searchVO" resultType="egovMap">
+			SELECT
+				p.id, p.title, p.content, p.thumbnail, p.view_count, p.reg_date, p.mod_date
+			FROM post p
+			<if test="searchCondition == 'member'">
+				JOIN member m ON p.member_id = m.id		<!-- todo: JOIN 보다 SubQuery가 나은가? -->
+			</if>
+			WHERE p.use_yn=true	
+			<if test="searchKeyword != null and searchKeyword != ''"> 
+				<if test="searchCondition == 'member'">
+					AND	m.name LIKE CONCAT('%', #{searchKeyword}, '%')
+				</if>
+				<if test="searchCondition == 'title'">
+					AND	p.title LIKE CONCAT('%', #{searchKeyword}, '%')
+				</if>
+			</if>
+			ORDER BY p.id DESC				
+			LIMIT #{recordCountPerPage} OFFSET #{firstIndex}
+	</select>
+
+	<select id="selectPostTotCnt" parameterType="searchVO" resultType="int">
+			SELECT COUNT(*) totcnt
+			FROM post p
+			<if test="searchCondition == 'member'">
+				JOIN member m ON p.member_id = m.id
+			</if>
+			WHERE p.use_yn=true	
+			<if test="searchKeyword != null and searchKeyword != ''"> 
+				<if test="searchCondition == 'member'">
+					AND	m.name LIKE CONCAT('%', #{searchKeyword}, '%')
+				</if>
+				<if test="searchCondition == 'title'">
+					AND	p.title LIKE CONCAT('%', #{searchKeyword}, '%')
+				</if>
+			</if>
+	</select>
+	
+	
+	<!-- INSERT QUERY -->
+	<insert id="insertPost" parameterType="postVO" useGeneratedKeys="true" keyProperty="id">
+			INSERT INTO post(
+				  	title
+				  , member_id
+				  , content
+				  , thumbnail
+				  , reg_date
+				  , mod_date
+			)
+			VALUES (
+				  	#{title}
+				  , #{memberId}
+				  , #{content}
+				  , #{thumbnail}
+				  , now()
+				  , now()
+			  )
+	</insert>
+	
+	<!-- UPDATE QUERY -->
+	<update id="increaseViewCount">
+		UPDATE post
+		SET view_count = view_count + 1
+	  	WHERE id=#{id}
+	</update>
+	
+	<update id="deletePostById">
+		UPDATE post
+		SET use_yn = false
+	  	WHERE id=#{id} AND member_id=#{memberId} 
+	</update>
+	
+	
+	<update id="updatePost">
+		UPDATE post
+			SET title=#{title}
+			   ,content=#{content}
+			   ,thumbnail=#{thumbnail}
+			   ,mod_date=now()
+		  	WHERE id=#{id}
+	</update>
+</mapper>

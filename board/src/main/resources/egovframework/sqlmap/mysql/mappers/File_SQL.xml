@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.mvc.service.mapper.FileMapper">
+
+	<resultMap id="fileVO"
+		type="egovframework.example.mvc.vo.FileVO">
+		<result property="id" column="id"/>
+		<result property="postId" column="post_id"/>
+		<result property="originalName" column="original_name"/>
+		<result property="extension" column="extension"/>
+		<result property="savedName" column="saved_name"/>
+		<result property="path" column="path"/>
+		<result property="size" column="size"/>
+		<result property="regDate" column="reg_date"/>
+		<result property="useYn" column="use_yn"/>
+	</resultMap>
+	
+	
+	<!--  SELECT QUERY  --> 
+	<select id="selectFilesByPostId" parameterType="Long" resultType="egovMap">
+		SELECT id, original_name, extension, saved_name, path, size, reg_date
+		FROM file_info
+		WHERE post_id = #{postId} AND use_yn = true;
+	</select>
+	
+	<select id="selectFileById" parameterType="Long" resultMap="fileVO">
+		SELECT id, original_name, extension, saved_name, path, size, reg_date
+		FROM file_info
+		WHERE id = #{id} AND use_yn = true;
+	</select>
+	
+	
+	<!--  INSERT QUERY  -->
+	<insert id="insertFiles" parameterType="java.util.List">
+		INSERT INTO file_info (post_id, original_name, extension, saved_name, path, size, reg_date)
+	    VALUES
+	    <foreach collection="list" item="fileVO" separator=",">
+	        (
+	            #{fileVO.postId},
+	            #{fileVO.originalName},
+	            #{fileVO.extension},
+	            #{fileVO.savedName},
+	            #{fileVO.path},
+	            #{fileVO.size},
+	            #{fileVO.regDate}
+	        )
+	    </foreach>
+	</insert>
+	
+	<!--  UPDATE QUERY  -->
+	<update id="deleteFileByIds" parameterType="java.util.List">
+	    UPDATE file_info
+	    SET use_yn = false
+	    WHERE id IN 
+	    <foreach collection="list" item="id" open="(" separator="," close=")">
+	        #{id}
+	    </foreach>
+	</update>
+	
+</mapper>
