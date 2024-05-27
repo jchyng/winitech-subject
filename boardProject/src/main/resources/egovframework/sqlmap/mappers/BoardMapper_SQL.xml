@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.board.service.mapper.BoardMapper">
+
+	
+	<resultMap id="boardVO" type="egovframework.example.board.vo.BoardVO">
+        <result property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+		<result property="title" column="title"/>
+		<result property="content" column="content"/>
+		<result property="member" column="member"/>
+		<result property="password" column="password"/>
+		<result property="regDate" column="reg_date"/>
+		<result property="modDate" column="mod_date"/>
+		<result property="viewCount" column="view_count"/>
+		<result property="useYn" column="use_yn"/>
+	</resultMap>
+	
+	
+
+	<!--  SELECT QUERY  --> 
+	<select id="selectBoard" parameterType="Long" resultMap="boardVO">	<!-- egovMap 사용 시 cast 에러 -->
+			SELECT
+				id, parent_id, title, content, member, reg_date, mod_date, view_count	<!-- 비밀번호는 보안을 위해 제외 -->
+			FROM board
+			WHERE id=#{id} AND use_yn=true	
+	</select>
+
+	<!-- 변수는 $ 사용하지만, SQL Injection에 취약하므로 사용자가 직접 입력하는 값에는 사용하지 않는다. 
+		여기서는 Enum을 사용하기 때문에 정해진 값만이 들어갈 수 있다. 따라서 SQL Injection이 불가능하다.
+	-->
+	<select id="selectBoardList" parameterType="searchVO" resultType="egovMap">
+			SELECT
+				id, parent_id, title, content, member, password, reg_date, mod_date, view_count
+			FROM board
+			WHERE use_yn=true	
+			<if test="searchKeyword != null and searchKeyword != ''"> 	<!-- %like%는 앞에 값을 모르기 때문에 인덱스를 안탄다. => like%는 됨. -->
+				AND	${searchCondition} LIKE CONCAT('%', #{searchKeyword}, '%')
+			</if>
+			ORDER BY
+			    CASE
+			        WHEN parent_id IS NULL THEN id
+			        ELSE parent_id
+			    END
+			    DESC				
+			LIMIT #{recordCountPerPage} OFFSET #{firstIndex}
+	</select>
+
+	<select id="selectBoardListTotCnt" parameterType="searchVO" resultType="int">
+			SELECT COUNT(*) totcnt
+			FROM board
+			WHERE use_yn=true		
+			<if test="searchKeyword != null and searchKeyword != ''">
+				AND	${searchCondition} LIKE CONCAT('%', #{searchKeyword}, '%')
+			</if>
+	</select>
+	
+	<select id="selectPassword" resultType="java.lang.String">
+		SELECT password
+		FROM board
+		WHERE id=#{id} AND use_yn=true	
+	</select>
+
+
+	<!-- INSERT QUERY -->
+	<insert id="insertBoard" parameterType="boardVO" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+			INSERT INTO board(
+					parent_id
+				  ,	title
+				  , content
+				  , member
+				  , password
+				  , reg_date
+				  , mod_date
+				  , view_count
+			)
+			VALUES (
+					#{parentId}
+				  , #{title}
+				  , #{content}
+				  , #{member}
+				  , #{password}
+				  , #{regDate}
+				  , #{modDate}
+				  , #{viewCount}
+			  )
+	</insert>
+
+	<!-- UPDATE QUERY -->
+	<update id="updateBoard">
+			UPDATE board
+			SET title=#{title}
+				, content=#{content}
+				, member=#{member}
+				, mod_date=#{modDate}
+		  	WHERE id=#{id}
+	</update>
+	
+	<update id="increaseViewCount">
+			UPDATE board
+			SET view_count = view_count + 1
+		  	WHERE id=#{id}
+	</update>
+
+	<update id="deleteBoard">
+			UPDATE board
+			SET use_yn = false
+			WHERE id=#{id}
+	</update>
+	
+	
+	<!-- DELETE QUERY -->
+	
+	
+	
+</mapper>

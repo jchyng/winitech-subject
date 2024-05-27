@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.board.service.mapper.FileMapper">
+
+	
+	<resultMap id="FileVO" type="egovframework.example.board.vo.FileVO">
+        <result property="id" column="id"/>
+		<result property="boardId" column="board_id"/>
+		<result property="originalName" column="original_name"/>
+		<result property="extension" column="extension"/>
+		<result property="savedName" column="saved_name"/>
+		<result property="path" column="path"/>
+		<result property="size" column="size"/>
+		<result property="regDate" column="reg_date"/>
+		<result property="useYn" column="use_yn"/>
+	</resultMap>
+	
+	
+
+	<!--  SELECT QUERY  --> 
+	<select id="selectFileList" resultType="egovMap">
+		SELECT id, board_id, original_name, extension, saved_name, path, size, reg_date
+		FROM file
+		WHERE board_id = #{boardId} AND use_yn=true	
+	</select>
+	
+	<select id="selectFile" resultMap="FileVO">
+		SELECT id, board_id, original_name, extension, saved_name, path, size, reg_date
+		FROM file
+		WHERE id = #{id} AND use_yn=true	
+	</select>
+	
+
+
+	<!-- INSERT QUERY -->
+	<insert id="insertAllFile" parameterType="java.util.List">
+		INSERT INTO file (board_id, original_name, extension, saved_name, path, size, reg_date)
+	    VALUES
+	    <foreach collection="list" item="fileVO" separator=",">
+	        (
+	            #{fileVO.boardId},
+	            #{fileVO.originalName},
+	            #{fileVO.extension},
+	            #{fileVO.savedName},
+	            #{fileVO.path},
+	            #{fileVO.size},
+	            #{fileVO.regDate}
+	        )
+	    </foreach>
+	</insert>
+
+
+
+	<!-- UPDATE QUERY -->
+	<update id="deleteByRetainedFiles" parameterType="hashMap">
+		UPDATE file 
+		SET use_yn = false
+		WHERE board_id = #{boardId}
+			<if test="retainedFileIds != null and retainedFileIds.length > 0">
+			AND id NOT IN 
+			<foreach collection="retainedFileIds" item="id" open="(" separator="," close=")">
+            	#{id}
+        	</foreach>
+       	</if>
+	</update>
+
+	<update id="deleteFileByboardId" parameterType="long">
+		UPDATE file 
+		SET use_yn = false
+		WHERE board_id = #{boardId}
+	</update>
+
+	<!-- DELETE QUERY -->
+	
+
+	
+</mapper>
