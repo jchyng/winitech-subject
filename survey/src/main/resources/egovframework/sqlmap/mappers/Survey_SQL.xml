@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="egovframework.example.mvc.service.mapper.SurveyMapper">
+	
+	
+	<!-- SurveyDTO resultMap -->
+	<resultMap type="surveyDTO" id="surveyDTO">
+    <id property="id" column="survey_id" />
+    <result property="memberId" column="member_id" />
+    <result property="memberName" column="member_name" />
+    <result property="title" column="title" />
+    <result property="description" column="description" />
+    <result property="stDate" column="st_date" />
+    <result property="edDate" column="ed_date" />
+    <collection property="questions" ofType="questionDTO">
+        <id property="id" column="question_id" />
+        <result property="surveyId" column="q_survey_id" />
+        <result property="content" column="question_content" />
+        <result property="type" column="question_type" javaType="QuestionType"
+            typeHandler="enumTypeHandler"/>
+        <result property="position" column="question_position" />
+        <result property="isRequired" column="question_is_required" />
+        <association property="fileVO" javaType="fileVO">
+            <id property="id" column="file_id" />
+            <result property="questionId" column="f_question_id" />
+            <result property="originalName" column="original_name" />
+            <result property="extension" column="extension" />
+            <result property="savedName" column="saved_name" />
+            <result property="path" column="path" />
+            <result property="size" column="size" />
+        </association>
+        <collection property="options" ofType="selectOptionVO">
+            <id property="id" column="option_id" />
+            <result property="questionId" column="o_question_id" />
+            <result property="content" column="option_content" />
+            <result property="position" column="option_position" />
+        </collection>
+    </collection>
+	</resultMap>
+	
+	
+	<!-- StasticsSurveyDTO -->
+	<resultMap type="statisticsSurveyDTO" id="statisticsDTO">
+    <id property="id" column="survey_id" />
+    <result property="title" column="survey_title" />
+    <result property="description" column="survey_description" />
+    <result property="stDate" column="survey_st_date" />
+    <result property="edDate" column="survey_ed_date" />
+    <collection property="questions" ofType="statisticsQuestionDTO">
+        <id property="id" column="question_id" />
+        <result property="type" column="question_type" javaType="QuestionType"
+            typeHandler="enumTypeHandler"/>
+        <result property="content" column="question_content" />
+        <result property="totalAnswerCount" column="total_answer_count" />
+        <collection property="answers" ofType="statisticsAnswerDTO">
+            <result property="content" column="answer_content" />
+            <result property="countPerAnswer" column="count_per_answer"/>
+        </collection>
+    </collection>
+	</resultMap>
+	
+	
+	<resultMap type="egovframework.example.mvc.vo.FileVO" id="fileVO">
+		<id property="id" column="id"/>
+		<result property="questionId" column="question_id"/>
+		<result property="originalName" column="original_name"/>
+		<result property="extension" column="extension"/>
+		<result property="savedName" column="saved_name"/>
+		<result property="size" column="size"/>
+		<result property="path" column="path"/>
+	</resultMap>
+	
+	
+	
+	<!-- INSERT QUERY -->
+	<!-- 설문 생성 -->
+	<insert id="insertSurvey" useGeneratedKeys="true" keyProperty="id">
+		INSERT INTO 
+		    survey(member_id, title, description, st_date, ed_date, reg_date, mod_date)
+		VALUES(#{memberId}, #{title}, #{description}, #{stDate}, #{edDate}, now(), now())
+	</insert>	
+	
+	<!-- 질문 생성 -->
+	<insert id="insertQuestions" useGeneratedKeys="true" keyProperty="id">
+		INSERT INTO
+		    question(survey_id, content, type, position, is_required)
+		VALUES (#{surveyId}, #{content}, #{type}, #{position}, #{isRequired})
+	</insert>	
+	
+	<!-- 객관식 답안 생성 -->
+	<insert id="insertOptions" useGeneratedKeys="true" keyProperty="id">
+		INSERT INTO 
+		    select_option(question_id, content, position)
+		VALUES 
+			<foreach collection="list" item="option" separator=",">
+				(#{option.questionId}, #{option.content}, #{option.position})
+			</foreach>
+	</insert>
+	
+	<!-- 파일 추가 -->
+	<insert id="insertFile">
+		INSERT INTO
+	    	file(question_id, original_name, extension, saved_name, size, path)
+		VALUES 
+    		(#{questionId}, #{originalName}, #{extension}, #{savedName}, #{size}, #{path})
+	</insert>
+	
+	<!-- 답변 생성 -->	
+	<insert id="insertAnswers">
+		INSERT answer(member_id, survey_id, question_id, content, reg_date)
+		VALUES
+			<foreach collection="vos" item="answer" separator=",">	
+		    	(#{memberId}, #{surveyId}, #{answer.questionId}, #{answer.content}, now())
+	    </foreach>
+	</insert>
+
+	
+	<!-- SELECT QUERY -->
+	<!-- 내가 만든 설문 목록 조회-->
+	<select id="selectMySurveys" resultType="egovMap" parameterType="hashMap">
+		SELECT s.id, s.title, s.description, m.name, s.st_date, s.ed_date, s.reg_date 
+		FROM survey s 
+		JOIN member m
+				ON s.member_id = m.id
+		WHERE s.member_id = #{memberId} AND s.use_yn = true
+		    AND s.title LIKE CONCAT('%', #{dto.searchKeyword}, '%')
+		ORDER BY s.st_date DESC, s.ed_date DESC
+		LIMIT #{dto.recordCountPerPage} OFFSET #{dto.firstIndex}
+	</select>
+	
+	<!-- 설문 목록 조회-->
+	<select id="selectSurveys" resultType="egovMap">
+		<!-- 제목 검색 -->
+		<if test="dto.searchCondition.name() == 'TITLE'">
+			SELECT 
+						s.id, 
+						s.title, 
+						s.description, 
+						m.name, 
+						s.st_date, 
+						s.ed_date, 
+						s.reg_date,
+						EXISTS (SELECT 1 FROM answer WHERE survey_id = s.id AND member_id = #{memberId}) AS response
+			FROM survey s 
+			JOIN member m
+					ON s.member_id = m.id
+			WHERE s.use_yn = true
+			    AND s.title LIKE CONCAT('%', #{dto.searchKeyword}, '%')
+			ORDER BY s.st_date DESC, s.ed_date DESC
+			LIMIT #{dto.recordCountPerPage} OFFSET #{dto.firstIndex}
+		</if>
+		<!-- 작성자 검색 -->
+		<if test="dto.searchCondition.name() == 'MEMBER'">
+			SELECT 
+						s.id, 
+						s.title, 
+						s.description, 
+						m.name, 
+						s.st_date, 
+						s.ed_date, 
+						s.reg_date,
+						EXISTS (SELECT 1 FROM answer WHERE survey_id = s.id AND member_id = #{memberId}) AS response
+			FROM survey s 
+			JOIN member m
+					ON s.member_id = m.id
+			WHERE s.use_yn = true
+			    AND m.name LIKE CONCAT('%', #{searchKeyword}, '%')
+			ORDER BY s.st_date DESC, s.ed_date DESC
+			LIMIT #{recordCountPerPage} OFFSET #{firstIndex}
+		</if>
+	</select>
+	
+	<!-- 내가 만든 설문 목록 개수 -->
+	<select id="countMySurveys" resultType="int">
+		SELECT count(id)
+		FROM survey
+		WHERE member_id = #{memberId} AND use_yn = true
+		    AND title LIKE CONCAT('%', #{dto.searchKeyword}, '%')
+	</select>
+	
+	<!-- 설문 목록 개수 -->
+	<select id="countSurveys" resultType="int">
+		<!-- 제목 검색 -->
+		<if test="searchCondition.name() == 'TITLE'">
+			SELECT count(*)
+			FROM survey
+			WHERE use_yn = true
+			    AND title LIKE CONCAT('%', #{searchKeyword}, '%')
+		</if>
+		<!-- 작성자 검색 -->
+		<if test="searchCondition.name() == 'MEMBER'">
+			SELECT count(*)
+			FROM survey s 
+			JOIN member m
+			    ON s.member_id = m.id
+			WHERE s.use_yn = true
+			    AND m.name LIKE CONCAT('%', #{searchKeyword}, '%')
+		</if>
+	</select>
+	
+	<!-- 설문 상세 조회 -->
+	<select id="selectSurvey" resultMap="surveyDTO">
+			SELECT 
+	        s.id AS survey_id,
+	        s.member_id,
+	        s.title,
+	        s.description,
+	        s.st_date,
+	        s.ed_date,
+	        q.id AS question_id,
+	        q.content AS question_content,
+	        q.type AS question_type,
+	        q.position AS question_position,
+	        q.is_required AS question_is_required,
+	        o.id AS option_id,
+	        o.question_id AS o_question_id,
+	        o.content AS option_content,
+	        o.position AS option_position,
+	        f.id AS file_id,
+	        f.question_id AS f_question_id,
+	        f.original_name,
+	        f.extension,
+	        f.saved_name,
+	        f.path,
+	        f.size
+	    FROM survey s
+	    LEFT JOIN question q ON s.id = q.survey_id
+	    LEFT JOIN select_option o ON q.id = o.question_id
+	    LEFT JOIN file f ON q.id = f.question_id
+	    WHERE s.id=#{id} AND s.use_yn=true
+	</select>
+	
+	<!-- 통계 조회 -->
+	<select id="selectStatistics" resultMap="statisticsDTO">
+		SELECT 
+	    s.id AS survey_id,
+	    s.title AS survey_title,
+	    s.description AS survey_description,
+	    s.st_date AS survey_st_date,
+	    s.ed_date AS survey_ed_date,
+	    q.id AS question_id,
+	    q.type as question_type,
+	    q.content AS question_content,
+	    (SELECT COUNT(*) FROM survey.answer a2 WHERE a2.question_id = q.id) AS total_answer_count,
+	    a.content AS answer_content,
+	    COUNT(DISTINCT a.content) AS count_per_answer
+		FROM 
+		    survey.survey s
+		JOIN 
+		    survey.question q ON s.id = q.survey_id
+		LEFT JOIN 
+		    survey.answer a ON s.id = a.survey_id AND q.id = a.question_id
+		WHERE 
+		    s.id=#{id}
+		    AND s.member_id=#{memberId}
+		GROUP BY 
+		    s.id, s.title, s.description, s.st_date, s.ed_date, q.id, q.content, a.content;
+	</select>
+	
+	<!-- File 조회 -->
+	<select id="selectFile" resultMap="fileVO"> 
+		SELECT id, question_id, original_name, extension, saved_name, path, size
+		FROM file
+		WHERE id=#{id}
+	</select>
+	
+	<!-- 유저의 설문조사 답변 여부 조회 -->
+	<select id="countSumittedSurvey" resultType="int">
+		SELECT COUNT(*) FROM answer WHERE member_id=#{memberId} AND survey_id=#{id} LIMIT 1
+	</select>
+	
+	
+	<!-- UPDATE QUERY -->
+	<!-- 설문 수정 -->
+	<update id="updateSurvey">
+		UPDATE survey
+		SET title=#{title}, 
+				description=#{description}, 
+				st_date=#{stDate}, 
+				ed_date=#{edDate}, 
+				mod_date=now()
+		WHERE id=#{id} AND member_id=#{memberId}
+	</update>
+	
+	<!-- 설문 삭제 -->
+	<update id="deleteSurvey">
+		UPDATE survey 
+		SET use_yn = false 
+		WHERE id=#{id} AND member_id=#{memberId}
+	</update>
+	
+	
+	<!-- DELETE QUERY -->
+	<!-- 설문에 대한 모든 질문 삭제 -->
+	<delete id="deleteQuestionsBySurvey">
+		DELETE FROM question
+		WHERE survey_id=#{id}
+		AND NOT EXISTS (SELECT * FROM answer WHERE survey_id=#{id} LIMIT 1)
+	</delete>
+</mapper>
